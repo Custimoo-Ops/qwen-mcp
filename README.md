@@ -24,7 +24,7 @@ Inputs can be local image paths, HTTPS image URLs, or data URLs.
 
 ## Claude Desktop / Company Connector config
 
-The Custimoo `Connectors` marketplace plugin points Claude Desktop at this package with `npx`.
+The Custimoo `Plugins` company marketplace points Claude Desktop at this package with `npx`.
 
 The MCP server requires one of:
 
@@ -51,7 +51,7 @@ If Claude says the plugin is “still connecting”, check that Node/npm are ins
 ## Local smoke test
 
     npm install
-    OPENROUTER_API_KEY_FILE="/Users/dsmacmini/Documents/David-Obsidian/Qwen Ops key - openrouter.md" npm start
+    OPENROUTER_API_KEY_FILE="$HOME/.custimoo/openrouter-qwen.key" npm start
 
 The server runs on stdio, so it will wait silently for MCP messages. Use Claude Desktop or an MCP inspector for interactive testing.
 
@@ -59,10 +59,10 @@ The server runs on stdio, so it will wait silently for MCP messages. Use Claude 
 
 ## Central updates
 
-Designer installations should run this package through the Custimoo `Plugins` marketplace, which points Claude Desktop at:
+Designer installations should run this package through the Custimoo `Plugins` company marketplace. The marketplace pins the `npx` source to an immutable release tag such as:
 
-`npx -y github:Custimoo-Ops/qwen-mcp#main`
+`npx -y github:Custimoo-Ops/qwen-mcp#v0.1.2`
 
-That means MCP server/tool fixes are controlled centrally from this repository and are picked up when Claude Desktop restarts and launches the server again.
+Do not point production installs at `#main`. Release a reviewed tag when server/tool fixes should roll out.
 
-The production review behavior is also centrally controlled by `prompts/qwen-design-system-prompt.md`. By default the server fetches the prompt from GitHub raw on startup. To override it for testing, set `QWEN_SYSTEM_PROMPT_FILE` or `QWEN_SYSTEM_PROMPT_URL`. Set `QWEN_SYSTEM_PROMPT_URL=off` to use the built-in fallback prompt.
+The production review rubric is bundled from `prompts/qwen-design-system-prompt.md` inside the pinned package. For local testing only, set `QWEN_SYSTEM_PROMPT_FILE`. If `QWEN_SYSTEM_PROMPT_URL` is used, it must be a `raw.githubusercontent.com` URL pinned to a 40-character commit SHA; branch URLs such as `/main/` are rejected.

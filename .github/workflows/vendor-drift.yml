@@ -1,0 +1,22 @@
+name: vendor-drift
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  vendor-drift:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - name: Reinstall exact dependencies from lockfile
+        run: npm ci
+      - name: Verify bundled dependency drift
+        run: git diff --exit-code package.json package-lock.json node_modules
+      - name: Verify MCP smoke test
+        run: npm run smoke

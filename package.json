@@ -1,6 +1,6 @@
 {
   "name": "@custimoo/qwen-mcp",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Claude Desktop MCP server for Qwen3-VL design and production review via OpenRouter.",
   "type": "module",
   "bin": {
@@ -9,11 +9,13 @@
   "files": [
     "bin",
     "prompts",
+    "scripts",
     "README.md"
   ],
   "scripts": {
     "start": "node bin/server.mjs",
-    "smoke": "node bin/server.mjs --help"
+    "smoke": "node scripts/mcp-smoke-test.mjs",
+    "verify:vendor": "npm ci && git diff --exit-code package.json package-lock.json node_modules"
   },
   "keywords": [
     "mcp",
@@ -26,10 +28,14 @@
   "author": "Custimoo Ops",
   "license": "MIT",
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.17.5",
-    "openai": "^4.104.0"
+    "@modelcontextprotocol/sdk": "1.29.0",
+    "openai": "4.104.0"
   },
   "engines": {
     "node": ">=18.0.0"
-  }
+  },
+  "bundleDependencies": [
+    "@modelcontextprotocol/sdk",
+    "openai"
+  ]
 }

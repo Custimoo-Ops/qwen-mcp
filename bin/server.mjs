@@ -11,7 +11,6 @@ const DEFAULT_MODEL = 'qwen/qwen3-vl-235b-a22b-instruct';
 const MODEL = process.env.QWEN_MODEL || process.env.OPENROUTER_MODEL || DEFAULT_MODEL;
 const API_KEY_INFO = readApiKey();
 const API_KEY = API_KEY_INFO.value;
-const DEFAULT_SYSTEM_PROMPT_URL = 'https://raw.githubusercontent.com/Custimoo-Ops/qwen-mcp/main/prompts/qwen-design-system-prompt.md';
 let cachedSystemPrompt;
 
 function readApiKey() {
@@ -20,8 +19,7 @@ function readApiKey() {
   }
   const candidates = [
     { source: 'OPENROUTER_API_KEY_FILE', file: process.env.OPENROUTER_API_KEY_FILE },
-    { source: '~/.custimoo/openrouter-qwen.key', file: path.join(process.env.HOME || '', '.custimoo', 'openrouter-qwen.key') },
-    { source: '/Users/dsmacmini/Documents/David-Obsidian/Qwen Ops key - openrouter.md', file: '/Users/dsmacmini/Documents/David-Obsidian/Qwen Ops key - openrouter.md' }
+    { source: '~/.custimoo/openrouter-qwen.key', file: path.join(process.env.HOME || '', '.custimoo', 'openrouter-qwen.key') }
   ].filter((candidate) => candidate.file).filter((candidate) => !candidate.file.includes('${'));
   for (const candidate of candidates) {
     if (fs.existsSync(candidate.file)) {
@@ -91,8 +89,23 @@ async function productionReviewPrompt() {
     return cachedSystemPrompt;
   }
 
-  const promptUrl = process.env.QWEN_SYSTEM_PROMPT_URL || DEFAULT_SYSTEM_PROMPT_URL;
+  const bundledPromptFile = new URL('../prompts/qwen-design-system-prompt.md', import.meta.url);
+  try {
+    const text = fs.readFileSync(bundledPromptFile, 'utf8').trim();
+    if (text) {
+      cachedSystemPrompt = text;
+      return cachedSystemPrompt;
+    }
+  } catch {
+    // Continue to optional pinned URL or built-in fallback.
+  }
+
+  const promptUrl = process.env.QWEN_SYSTEM_PROMPT_URL;
   if (promptUrl && promptUrl.toLowerCase() !== 'off') {
+    const pinnedRawGithub = /^https:\/\/raw\.githubusercontent\.com\/[^/]+\/[^/]+\/[0-9a-f]{40}\//i.test(promptUrl);
+    if (!pinnedRawGithub) {
+      throw new Error('QWEN_SYSTEM_PROMPT_URL must be pinned to an immutable raw.githubusercontent.com commit SHA, or set QWEN_SYSTEM_PROMPT_FILE for local testing.');
+    }
     try {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), Number(process.env.QWEN_SYSTEM_PROMPT_TIMEOUT_MS || 2500));
@@ -106,7 +119,7 @@ async function productionReviewPrompt() {
         }
       }
     } catch {
-      // Fall back silently so users are never blocked by a central prompt outage.
+      // Fall back silently so users are never blocked by a pinned prompt outage.
     }
   }
 
@@ -189,7 +202,7 @@ const tools = [
   }
 ];
 
-const server = new Server({ name: 'custimoo-qwen-design-mcp', version: '0.1.0' }, { capabilities: { tools: {} } });
+const server = new Server({ name: 'custimoo-qwen-design-mcp', version: '0.1.2' }, { capabilities: { tools: {} } });
 
 server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools }));
 
@@ -199,9 +212,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     let result;
     if (name === 'check_qwen_availability') {
       const status = {
-        connected: true,
+        serverRunning: true,
+        openRouterConfigured: Boolean(API_KEY),
+        connected: Boolean(API_KEY),
         model: MODEL,
-        hasOpenRouterKey: Boolean(API_KEY),
         keySource: API_KEY_INFO.source || null,
         nodeVersion: process.version,
         message: API_KEY
