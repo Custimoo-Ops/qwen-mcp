@@ -1,6 +1,6 @@
 {
   "name": "@custimoo/qwen-mcp",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Claude Desktop MCP server for Qwen3-VL design and production review via OpenRouter.",
   "type": "module",
   "bin": {
