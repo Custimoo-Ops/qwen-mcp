@@ -12,9 +12,17 @@ const MODEL = process.env.QWEN_MODEL || process.env.OPENROUTER_MODEL || DEFAULT_
 const API_KEY = readApiKey();
 
 function readApiKey() {
-  if (process.env.OPENROUTER_API_KEY) return process.env.OPENROUTER_API_KEY.trim();
-  const keyFile = process.env.OPENROUTER_API_KEY_FILE;
-  if (keyFile && fs.existsSync(keyFile)) return fs.readFileSync(keyFile, 'utf8').trim();
+  if (process.env.OPENROUTER_API_KEY && !process.env.OPENROUTER_API_KEY.includes('${')) {
+    return process.env.OPENROUTER_API_KEY.trim();
+  }
+  const candidates = [
+    process.env.OPENROUTER_API_KEY_FILE,
+    path.join(process.env.HOME || '', '.custimoo', 'openrouter-qwen.key'),
+    '/Users/dsmacmini/Documents/David-Obsidian/Qwen Ops key - openrouter.md'
+  ].filter(Boolean).filter((p) => !p.includes('${'));
+  for (const keyFile of candidates) {
+    if (fs.existsSync(keyFile)) return fs.readFileSync(keyFile, 'utf8').trim();
+  }
   return '';
 }
 
