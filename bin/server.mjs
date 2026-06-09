@@ -9,28 +9,31 @@ import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprot
 
 const DEFAULT_MODEL = 'qwen/qwen3-vl-235b-a22b-instruct';
 const MODEL = process.env.QWEN_MODEL || process.env.OPENROUTER_MODEL || DEFAULT_MODEL;
-const API_KEY = readApiKey();
+const API_KEY_INFO = readApiKey();
+const API_KEY = API_KEY_INFO.value;
 const DEFAULT_SYSTEM_PROMPT_URL = 'https://raw.githubusercontent.com/Custimoo-Ops/qwen-mcp/main/prompts/qwen-design-system-prompt.md';
 let cachedSystemPrompt;
 
 function readApiKey() {
   if (process.env.OPENROUTER_API_KEY && !process.env.OPENROUTER_API_KEY.includes('${')) {
-    return process.env.OPENROUTER_API_KEY.trim();
+    return { value: process.env.OPENROUTER_API_KEY.trim(), source: 'OPENROUTER_API_KEY' };
   }
   const candidates = [
-    process.env.OPENROUTER_API_KEY_FILE,
-    path.join(process.env.HOME || '', '.custimoo', 'openrouter-qwen.key'),
-    '/Users/dsmacmini/Documents/David-Obsidian/Qwen Ops key - openrouter.md'
-  ].filter(Boolean).filter((p) => !p.includes('${'));
-  for (const keyFile of candidates) {
-    if (fs.existsSync(keyFile)) return fs.readFileSync(keyFile, 'utf8').trim();
+    { source: 'OPENROUTER_API_KEY_FILE', file: process.env.OPENROUTER_API_KEY_FILE },
+    { source: '~/.custimoo/openrouter-qwen.key', file: path.join(process.env.HOME || '', '.custimoo', 'openrouter-qwen.key') },
+    { source: '/Users/dsmacmini/Documents/David-Obsidian/Qwen Ops key - openrouter.md', file: '/Users/dsmacmini/Documents/David-Obsidian/Qwen Ops key - openrouter.md' }
+  ].filter((candidate) => candidate.file).filter((candidate) => !candidate.file.includes('${'));
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate.file)) {
+      return { value: fs.readFileSync(candidate.file, 'utf8').trim(), source: candidate.source };
+    }
   }
-  return '';
+  return { value: '', source: '' };
 }
 
 function requireApiKey() {
   if (!API_KEY) {
-    throw new Error('Missing OpenRouter API key. Set OPENROUTER_API_KEY or OPENROUTER_API_KEY_FILE.');
+    throw new Error('Missing OpenRouter API key. Set OPENROUTER_API_KEY, OPENROUTER_API_KEY_FILE, or create ~/.custimoo/openrouter-qwen.key.');
   }
 }
 
@@ -124,6 +127,16 @@ async function qwenVision(messages, maxTokens=1800) {
 
 const tools = [
   {
+    name: 'check_qwen_availability',
+    description: 'Check whether the Qwen design MCP server is connected, whether an OpenRouter API key is configured, and optionally ping OpenRouter. Use this first when a user asks if Qwen is ready.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ping: { type: 'boolean', description: 'If true, make a tiny OpenRouter request to verify the key/model. Defaults to false.' }
+      }
+    }
+  },
+  {
     name: 'review_design_image',
     description: 'Review one design/mockup/reference image with Qwen3-VL for production readiness. Accepts a local image path, image URL, or data URL.',
     inputSchema: {
@@ -184,7 +197,27 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   try {
     const { name, arguments: args = {} } = request.params;
     let result;
-    if (name === 'review_design_image') {
+    if (name === 'check_qwen_availability') {
+      const status = {
+        connected: true,
+        model: MODEL,
+        hasOpenRouterKey: Boolean(API_KEY),
+        keySource: API_KEY_INFO.source || null,
+        nodeVersion: process.version,
+        message: API_KEY
+          ? 'Qwen MCP is connected and an OpenRouter key is configured.'
+          : 'Qwen MCP is connected, but no OpenRouter key is configured. Add OPENROUTER_API_KEY, OPENROUTER_API_KEY_FILE, or ~/.custimoo/openrouter-qwen.key.'
+      };
+      if (args.ping) {
+        requireApiKey();
+        const ping = await qwenVision([
+          { role: 'system', content: 'Reply with exactly QWEN_MCP_AVAILABLE.' },
+          { role: 'user', content: 'availability ping' }
+        ], 20);
+        status.openRouterPing = ping.trim();
+      }
+      result = JSON.stringify(status, null, 2);
+    } else if (name === 'review_design_image') {
       result = await qwenVision([
         { role: 'system', content: await productionReviewPrompt() },
         { role: 'user', content: [

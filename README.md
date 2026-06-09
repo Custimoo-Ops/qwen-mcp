@@ -14,6 +14,7 @@ Override with:
 
 ## Tools
 
+- `check_qwen_availability` — check whether the MCP server is connected, whether an OpenRouter key is configured, and optionally ping OpenRouter.
 - `review_design_image` — review a mockup/reference/export image for production readiness.
 - `compare_design_images` — compare customer reference vs produced mockup/export.
 - `vectorization_qa` — compare original raster artwork vs vectorized result preview.
@@ -33,7 +34,19 @@ or:
 
     OPENROUTER_API_KEY_FILE=/path/to/openrouter-key.md
 
-Do not commit API keys into GitHub.
+or a local key file:
+
+    ~/.custimoo/openrouter-qwen.key
+
+A designer can create the local key file with:
+
+    mkdir -p ~/.custimoo
+    pbpaste > ~/.custimoo/openrouter-qwen.key
+    chmod 600 ~/.custimoo/openrouter-qwen.key
+
+Only do this after copying the approved OpenRouter key to the clipboard. Do not commit API keys into GitHub.
+
+If Claude says the plugin is “still connecting”, check that Node/npm are installed and reachable from Claude Desktop, then restart Claude Desktop. If Claude says “organization has disabled Claude subscription access for Claude Code”, that is a separate Claude access/admin setting: Qwen still needs a working host Claude account/session to invoke the MCP tools.
 
 ## Local smoke test
 
