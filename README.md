@@ -41,3 +41,15 @@ Do not commit API keys into GitHub.
     OPENROUTER_API_KEY_FILE="/Users/dsmacmini/Documents/David-Obsidian/Qwen Ops key - openrouter.md" npm start
 
 The server runs on stdio, so it will wait silently for MCP messages. Use Claude Desktop or an MCP inspector for interactive testing.
+
+
+
+## Central updates
+
+Designer installations should run this package through the Custimoo `Plugins` marketplace, which points Claude Desktop at:
+
+`npx -y github:Custimoo-Ops/qwen-mcp#main`
+
+That means MCP server/tool fixes are controlled centrally from this repository and are picked up when Claude Desktop restarts and launches the server again.
+
+The production review behavior is also centrally controlled by `prompts/qwen-design-system-prompt.md`. By default the server fetches the prompt from GitHub raw on startup. To override it for testing, set `QWEN_SYSTEM_PROMPT_FILE` or `QWEN_SYSTEM_PROMPT_URL`. Set `QWEN_SYSTEM_PROMPT_URL=off` to use the built-in fallback prompt.

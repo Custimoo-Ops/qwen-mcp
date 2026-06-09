@@ -10,6 +10,8 @@ import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprot
 const DEFAULT_MODEL = 'qwen/qwen3-vl-235b-a22b-instruct';
 const MODEL = process.env.QWEN_MODEL || process.env.OPENROUTER_MODEL || DEFAULT_MODEL;
 const API_KEY = readApiKey();
+const DEFAULT_SYSTEM_PROMPT_URL = 'https://raw.githubusercontent.com/Custimoo-Ops/qwen-mcp/main/prompts/qwen-design-system-prompt.md';
+let cachedSystemPrompt;
 
 function readApiKey() {
   if (process.env.OPENROUTER_API_KEY && !process.env.OPENROUTER_API_KEY.includes('${')) {
@@ -65,7 +67,7 @@ function imageContentFromInput(input, label='image') {
   return { type: 'image_url', image_url: { url: `data:${mimeFor(filePath)};base64,${data}` } };
 }
 
-const productionReviewPrompt = `You are a senior production design assistant for Custimoo garment and merchandise production.
+const fallbackProductionReviewPrompt = `You are a senior production design assistant for Custimoo garment and merchandise production.
 Review only what is visible/provided. Do not invent facts.
 Focus on: artwork placement, alignment, scale, colors, missing elements, text/logo distortion, print/embroidery feasibility, artifacts, export/vector risks, ambiguity needing human confirmation.
 Return concise structured feedback with:
@@ -76,6 +78,38 @@ Return concise structured feedback with:
 5. Production risks
 6. Designer action checklist
 7. Questions/uncertainties`;
+
+async function productionReviewPrompt() {
+  if (cachedSystemPrompt) return cachedSystemPrompt;
+
+  const promptFile = process.env.QWEN_SYSTEM_PROMPT_FILE;
+  if (promptFile && !promptFile.includes('${') && fs.existsSync(promptFile)) {
+    cachedSystemPrompt = fs.readFileSync(promptFile, 'utf8').trim();
+    return cachedSystemPrompt;
+  }
+
+  const promptUrl = process.env.QWEN_SYSTEM_PROMPT_URL || DEFAULT_SYSTEM_PROMPT_URL;
+  if (promptUrl && promptUrl.toLowerCase() !== 'off') {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), Number(process.env.QWEN_SYSTEM_PROMPT_TIMEOUT_MS || 2500));
+      const response = await fetch(promptUrl, { signal: controller.signal });
+      clearTimeout(timeout);
+      if (response.ok) {
+        const text = (await response.text()).trim();
+        if (text) {
+          cachedSystemPrompt = text;
+          return cachedSystemPrompt;
+        }
+      }
+    } catch {
+      // Fall back silently so users are never blocked by a central prompt outage.
+    }
+  }
+
+  cachedSystemPrompt = fallbackProductionReviewPrompt;
+  return cachedSystemPrompt;
+}
 
 async function qwenVision(messages, maxTokens=1800) {
   requireApiKey();
@@ -152,7 +186,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     let result;
     if (name === 'review_design_image') {
       result = await qwenVision([
-        { role: 'system', content: productionReviewPrompt },
+        { role: 'system', content: await productionReviewPrompt() },
         { role: 'user', content: [
           { type: 'text', text: `Context: ${args.context || 'none'}\nFocus: ${args.focus || 'general production readiness'}\nReview this design image.` },
           imageContentFromInput(args.image, 'image')
@@ -160,7 +194,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       ]);
     } else if (name === 'compare_design_images') {
       result = await qwenVision([
-        { role: 'system', content: productionReviewPrompt },
+        { role: 'system', content: await productionReviewPrompt() },
         { role: 'user', content: [
           { type: 'text', text: `Context: ${args.context || 'none'}\nCompare image 1 (reference/customer expectation) with image 2 (produced mockup/export). List only meaningful visual/production differences and recommended corrections.` },
           imageContentFromInput(args.reference_image, 'reference_image'),
@@ -169,7 +203,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       ], 2200);
     } else if (name === 'vectorization_qa') {
       result = await qwenVision([
-        { role: 'system', content: productionReviewPrompt },
+        { role: 'system', content: await productionReviewPrompt() },
         { role: 'user', content: [
           { type: 'text', text: `Context: ${args.context || 'none'}\nCompare image 1 (original raster artwork) with image 2 (vectorized result preview). Check lost details, artifacts, path/shape quality visible in preview, text/logo distortion, color changes, and production readiness.` },
           imageContentFromInput(args.original_image, 'original_image'),
@@ -179,7 +213,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     } else if (name === 'ask_qwen_design') {
       const content = [{ type: 'text', text: args.prompt }];
       if (args.image) content.push(imageContentFromInput(args.image, 'image'));
-      result = await qwenVision([{ role: 'system', content: productionReviewPrompt }, { role: 'user', content }], 2200);
+      result = await qwenVision([{ role: 'system', content: await productionReviewPrompt() }, { role: 'user', content }], 2200);
     } else {
       throw new Error(`Unknown tool: ${name}`);
     }
